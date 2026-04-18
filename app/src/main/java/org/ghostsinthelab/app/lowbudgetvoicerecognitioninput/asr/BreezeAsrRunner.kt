@@ -43,12 +43,20 @@ class BreezeAsrRunner(
         pcm: ShortArray,
         language: String,
         maxNewTokens: Int = 200,
+        /**
+         * Mel-frame window the encoder processes. Whisper's reference is
+         * 3000 (30 s chunk). On memory-constrained devices, smaller values
+         * shrink the encoder's cross-attention K/V linearly — 1000 frames
+         * (10 s) cuts peak RAM by ~330 MB and is plenty for push-to-talk
+         * utterances ≤ 10 s.
+         */
+        melFrames: Int = 1_000,
         onProgress: (step: Int, tokenId: Int) -> Unit = { _, _ -> },
     ): Result {
         val phases = ArrayList<Phase>()
 
         val mel = timed("preprocess", phases) {
-            WhisperPreprocessor().process(pcm)
+            WhisperPreprocessor(numFrames = melFrames).process(pcm)
         }
 
         val tokenizer = timed("tokenizer", phases) {
@@ -60,7 +68,7 @@ class BreezeAsrRunner(
             ?: error("No matching language token for '$language' (and no en fallback)")
 
         val cross = timed("encoder", phases) {
-            WhisperEncoder(encoderFile).use { it.encode(mel) }
+            WhisperEncoder(encoderFile).use { it.encode(mel, numFrames = melFrames) }
         }
 
         try {

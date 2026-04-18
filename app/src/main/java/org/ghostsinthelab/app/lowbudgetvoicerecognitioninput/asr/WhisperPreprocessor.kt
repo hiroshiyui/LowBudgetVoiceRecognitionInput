@@ -31,6 +31,16 @@ class WhisperPreprocessor(
     private val hopLength: Int = 160,
     private val fftLength: Int = 512,
     private val melBins: Int = 80,
+    /**
+     * Target mel-frame count — i.e. how long a chunk the encoder will process.
+     * Whisper's reference is 3000 (30 s of audio at 10 ms/frame). For
+     * push-to-talk utterances shorter than 30 s you can pass a smaller value
+     * to save a lot of memory: the encoder's cross-attention K/V is
+     * `[numLayers, 1, numFrames/2, dModel]`, so halving numFrames halves
+     * that tensor. Padding is zero-fill up to this count (not Whisper's
+     * reflect padding — simplification; transcription quality shouldn't
+     * drop meaningfully on the padded tail).
+     */
     private val numFrames: Int = 3_000,
 ) {
     init {
