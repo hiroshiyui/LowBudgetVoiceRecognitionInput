@@ -19,7 +19,13 @@ data class ModelManifest(
     val totalBytes: Long get() = files.sumOf { it.sizeBytes }
 
     companion object {
-        fun load(context: Context, assetName: String = "model_manifest.json"): ModelManifest {
+        fun load(context: Context, bundle: ModelBundle): ModelManifest =
+            load(context, bundle.manifestAsset)
+
+        fun load(
+            context: Context,
+            assetName: String = ModelBundle.Breeze.manifestAsset,
+        ): ModelManifest {
             val text = context.assets.open(assetName).bufferedReader().use { it.readText() }
             val json = JSONObject(text)
             val entries = json.getJSONArray("files").let { arr ->

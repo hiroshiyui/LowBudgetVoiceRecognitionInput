@@ -1,0 +1,23 @@
+{
+  "modelId": "MediaTek-Research/Breeze-ASR-25-onnx-250806",
+  "revision": "main",
+  "variant": "int8",
+  "baseUrl": "https://huggingface.co/MediaTek-Research/Breeze-ASR-25-onnx-250806/resolve/main",
+  "files": [
+    {
+      "path": "breeze-asr-25-half-tokens.txt",
+      "sizeBytes": 816730,
+      "sha256": null
+    },
+    {
+      "path": "breeze-asr-25-half-encoder.int8.onnx",
+      "sizeBytes": 765942323,
+      "sha256": "fc3e99d1d3abf553d355fe35cc72ff943c6b2b77eeeea97e8d56338bff132fea"
+    },
+    {
+      "path": "breeze-asr-25-half-decoder.int8.onnx",
+      "sizeBytes": 1008223031,
+      "sha256": "be492b3bf597690dcd9871ac20c555faa9b78514d3e830402afdf2be0689fb20"
+    }
+  ]
+}

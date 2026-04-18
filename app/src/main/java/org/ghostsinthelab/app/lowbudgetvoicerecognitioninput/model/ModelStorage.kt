@@ -4,10 +4,13 @@ import android.content.Context
 import android.os.StatFs
 import java.io.File
 
-class ModelStorage(private val context: Context) {
+class ModelStorage(
+    private val context: Context,
+    val bundle: ModelBundle = ModelBundle.Breeze,
+) {
 
     val rootDir: File =
-        File(context.filesDir, "models/gemma-4-e2b-it-onnx").apply { mkdirs() }
+        File(context.filesDir, "models/${bundle.storageSubdir}").apply { mkdirs() }
 
     fun fileFor(entry: ManifestEntry): File =
         File(rootDir, entry.path).apply { parentFile?.mkdirs() }

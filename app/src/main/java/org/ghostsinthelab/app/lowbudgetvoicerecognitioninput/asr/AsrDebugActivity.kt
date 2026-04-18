@@ -43,6 +43,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.ghostsinthelab.app.lowbudgetvoicerecognitioninput.audio.AudioCapture
+import org.ghostsinthelab.app.lowbudgetvoicerecognitioninput.model.ModelBundle
 import org.ghostsinthelab.app.lowbudgetvoicerecognitioninput.model.ModelManifest
 import org.ghostsinthelab.app.lowbudgetvoicerecognitioninput.model.ModelStorage
 import org.ghostsinthelab.app.lowbudgetvoicerecognitioninput.ui.theme.LowBudgetVoiceRecognitionInputTheme
@@ -186,8 +187,8 @@ private fun AsrDebugScreen() {
  * Peak simultaneous: embed_tokens (~1.5 GB) + decoder (~1.4 GB).
  */
 private suspend fun runPipeline(context: Context, log: (String) -> Unit) {
-    val manifest = ModelManifest.load(context)
-    val storage = ModelStorage(context)
+    val manifest = ModelManifest.load(context, ModelBundle.Gemma)
+    val storage = ModelStorage(context, ModelBundle.Gemma)
     if (!storage.isInstalled(manifest)) {
         log("Model not installed.")
         return
@@ -341,8 +342,8 @@ private suspend fun runPipeline(context: Context, log: (String) -> Unit) {
 
 private suspend fun runTokenizerTest(context: Context, log: (String) -> Unit) {
     log("1. Checking model…")
-    val manifest = ModelManifest.load(context)
-    val storage = ModelStorage(context)
+    val manifest = ModelManifest.load(context, ModelBundle.Gemma)
+    val storage = ModelStorage(context, ModelBundle.Gemma)
     if (!storage.isInstalled(manifest)) {
         log("   Model not installed.")
         return
@@ -390,8 +391,8 @@ private suspend fun runTokenizerTest(context: Context, log: (String) -> Unit) {
 
 private suspend fun runEmbedTokensTest(context: Context, log: (String) -> Unit) {
     log("1. Checking model…")
-    val manifest = ModelManifest.load(context)
-    val storage = ModelStorage(context)
+    val manifest = ModelManifest.load(context, ModelBundle.Gemma)
+    val storage = ModelStorage(context, ModelBundle.Gemma)
     if (!storage.isInstalled(manifest)) {
         log("   Model not installed.")
         return
@@ -433,8 +434,8 @@ private suspend fun runEmbedTokensTest(context: Context, log: (String) -> Unit) 
 
 private suspend fun runInspectDecoder(context: Context, log: (String) -> Unit) {
     log("1. Checking model…")
-    val manifest = ModelManifest.load(context)
-    val storage = ModelStorage(context)
+    val manifest = ModelManifest.load(context, ModelBundle.Gemma)
+    val storage = ModelStorage(context, ModelBundle.Gemma)
     if (!storage.isInstalled(manifest)) {
         log("   Model not installed.")
         return
@@ -507,8 +508,8 @@ private fun tensorSortKey(name: String): String {
  * and can wire the audio path on top next.
  */
 private suspend fun runDecoderTextTest(context: Context, log: (String) -> Unit) {
-    val manifest = ModelManifest.load(context)
-    val storage = ModelStorage(context)
+    val manifest = ModelManifest.load(context, ModelBundle.Gemma)
+    val storage = ModelStorage(context, ModelBundle.Gemma)
     if (!storage.isInstalled(manifest)) {
         log("Model not installed.")
         return

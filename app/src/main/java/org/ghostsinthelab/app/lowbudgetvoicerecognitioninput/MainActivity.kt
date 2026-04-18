@@ -214,8 +214,9 @@ private fun ModelDownloadCard() {
                 style = MaterialTheme.typography.titleMedium,
             )
             Text(
-                "Gemma 4 E2B (q4f16) — about ${formatBytes(controller.manifest.totalBytes)} " +
-                    "downloaded once on Wi-Fi recommended.",
+                "${controller.bundle.label} (${controller.manifest.variant}) — about " +
+                    "${formatBytes(controller.manifest.totalBytes)} downloaded once on Wi-Fi " +
+                    "recommended.",
                 style = MaterialTheme.typography.bodyMedium,
             )
             Text(

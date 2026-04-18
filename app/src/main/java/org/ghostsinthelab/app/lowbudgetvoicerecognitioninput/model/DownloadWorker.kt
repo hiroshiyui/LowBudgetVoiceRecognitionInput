@@ -18,10 +18,12 @@ class DownloadWorker(
 
     override suspend fun doWork(): Result {
         val ctx = applicationContext
-        setForeground(buildForegroundInfo(0, 1, "Preparing model download…"))
+        val bundle = inputData.getString(KEY_BUNDLE)?.let { ModelBundle.valueOf(it) }
+            ?: ModelBundle.Breeze
+        setForeground(buildForegroundInfo(0, 1, "Preparing ${bundle.label} download…"))
 
-        val manifest = ModelManifest.load(ctx)
-        val storage = ModelStorage(ctx)
+        val manifest = ModelManifest.load(ctx, bundle.manifestAsset)
+        val storage = ModelStorage(ctx, bundle)
         val downloader = ModelDownloader()
 
         val totalBytes = manifest.totalBytes
@@ -96,11 +98,11 @@ class DownloadWorker(
     }
 
     companion object {
-        const val WORK_NAME = "model-download"
         const val NOTIFICATION_ID = 0xD0
         const val CHANNEL_ID = "model-download"
         private const val PROGRESS_INTERVAL_MS = 500L
 
+        const val KEY_BUNDLE = "bundle"
         const val KEY_OVERALL_BYTES = "overallBytes"
         const val KEY_TOTAL_BYTES = "totalBytes"
         const val KEY_CURRENT_FILE = "currentFile"
