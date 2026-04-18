@@ -29,6 +29,16 @@
             </intent-filter>
         </activity>
 
+        <activity
+            android:name=".asr.AsrDebugActivity"
+            android:exported="false"
+            android:label="ASR Debug" />
+
+        <service
+            android:name="androidx.work.impl.foreground.SystemForegroundService"
+            android:foregroundServiceType="dataSync"
+            tools:node="merge" />
+
         <service
             android:name=".ime.VoiceImeService"
             android:exported="true"

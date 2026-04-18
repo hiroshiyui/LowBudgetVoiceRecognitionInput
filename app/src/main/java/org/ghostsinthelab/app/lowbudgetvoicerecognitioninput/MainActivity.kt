@@ -3,6 +3,7 @@ package org.ghostsinthelab.app.lowbudgetvoicerecognitioninput
 import android.Manifest
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ApplicationInfo
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
@@ -47,6 +48,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import org.ghostsinthelab.app.lowbudgetvoicerecognitioninput.asr.AsrDebugActivity
 import org.ghostsinthelab.app.lowbudgetvoicerecognitioninput.model.ModelDownloadController
 import org.ghostsinthelab.app.lowbudgetvoicerecognitioninput.model.Preflight
 import org.ghostsinthelab.app.lowbudgetvoicerecognitioninput.ui.theme.LowBudgetVoiceRecognitionInputTheme
@@ -109,6 +111,34 @@ private fun SettingsScreen() {
                 },
             )
             ModelDownloadCard()
+            DebugCard()
+        }
+    }
+}
+
+@Composable
+private fun DebugCard() {
+    val context = LocalContext.current
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(
+                "Debug",
+                style = MaterialTheme.typography.titleMedium,
+            )
+            Text(
+                "Standalone pipeline test — records 5 s, computes log-mel, " +
+                    "runs the Gemma audio encoder, prints output shape and timings.",
+                style = MaterialTheme.typography.bodySmall,
+            )
+            FilledTonalButton(
+                onClick = {
+                    context.startActivity(Intent(context, AsrDebugActivity::class.java))
+                },
+                modifier = Modifier.align(Alignment.End),
+            ) { Text("Open ASR debug") }
         }
     }
 }
@@ -161,7 +191,11 @@ private fun ModelDownloadCard() {
     val state by controller.observe()
         .collectAsStateWithLifecycle(initialValue = ModelDownloadController.State.NotStarted)
     val preflight = remember(state) {
-        Preflight.check(context, controller.manifest, controller.storage())
+        val raw = Preflight.check(context, controller.manifest, controller.storage())
+        val debuggable = (context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
+        if (debuggable && raw is Preflight.Result.Block) {
+            Preflight.Result.Warn("[debug override] ${raw.message}")
+        } else raw
     }
     val totalRam = remember { Preflight.totalRamBytes(context) }
     val freeDisk = remember(state) { controller.storage().freeBytes() }

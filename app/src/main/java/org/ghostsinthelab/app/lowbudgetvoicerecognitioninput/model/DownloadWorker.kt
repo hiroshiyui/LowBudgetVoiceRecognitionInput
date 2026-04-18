@@ -4,6 +4,7 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
 import android.content.pm.ServiceInfo
+import android.os.SystemClock
 import androidx.core.app.NotificationCompat
 import androidx.work.CoroutineWorker
 import androidx.work.ForegroundInfo
@@ -28,6 +29,8 @@ class DownloadWorker(
             storage.fileFor(e).takeIf { it.exists() && it.length() == e.sizeBytes }?.length() ?: 0L
         }
 
+        var lastEmitMs = 0L
+
         try {
             for ((index, entry) in manifest.files.withIndex()) {
                 val target = storage.fileFor(entry)
@@ -45,15 +48,20 @@ class DownloadWorker(
                     expectedSize = entry.sizeBytes,
                     expectedSha256 = entry.sha256,
                     onProgress = { fileBytes ->
-                        val now = baseAtStart + fileBytes
-                        setProgress(
-                            workDataOf(
-                                KEY_OVERALL_BYTES to now,
-                                KEY_TOTAL_BYTES to totalBytes,
-                                KEY_CURRENT_FILE to label,
+                        val now = SystemClock.elapsedRealtime()
+                        val fileDone = fileBytes == entry.sizeBytes
+                        if (fileDone || now - lastEmitMs >= PROGRESS_INTERVAL_MS) {
+                            lastEmitMs = now
+                            val overall = baseAtStart + fileBytes
+                            setProgress(
+                                workDataOf(
+                                    KEY_OVERALL_BYTES to overall,
+                                    KEY_TOTAL_BYTES to totalBytes,
+                                    KEY_CURRENT_FILE to label,
+                                )
                             )
-                        )
-                        setForeground(buildForegroundInfo(now, totalBytes, label))
+                            setForeground(buildForegroundInfo(overall, totalBytes, label))
+                        }
                     },
                 )
                 overallBaseBytes = baseAtStart + entry.sizeBytes
@@ -61,6 +69,10 @@ class DownloadWorker(
             return Result.success()
         } catch (t: Throwable) {
             if (t is kotlinx.coroutines.CancellationException) throw t
+            // Transient network errors: let WorkManager back off and retry (up to 5 attempts).
+            if (t is java.io.IOException && runAttemptCount < 5) {
+                return Result.retry()
+            }
             return Result.failure(workDataOf(KEY_ERROR to (t.message ?: t.javaClass.simpleName)))
         }
     }
@@ -87,6 +99,7 @@ class DownloadWorker(
         const val WORK_NAME = "model-download"
         const val NOTIFICATION_ID = 0xD0
         const val CHANNEL_ID = "model-download"
+        private const val PROGRESS_INTERVAL_MS = 500L
 
         const val KEY_OVERALL_BYTES = "overallBytes"
         const val KEY_TOTAL_BYTES = "totalBytes"

@@ -1,6 +1,6 @@
 # TODO
 
-Tracks milestones from PLAN.md. M1–M3 complete; M4 is next.
+Tracks milestones from PLAN.md. M1–M3 + M4a complete; M4b is next.
 
 ## M1 — Project plumbing  ✅ done
 - [x] Add `RECORD_AUDIO` + `INTERNET` permissions in AndroidManifest
@@ -32,15 +32,35 @@ Tracks milestones from PLAN.md. M1–M3 complete; M4 is next.
 - [x] Replace settings step 3 with real download UI (progress, free disk, RAM, start / cancel / delete)
 - [x] Build and verify M3 compiles
 
-## M4 — Standalone ONNX inference prototype  🚧 next
-- [ ] Add `com.microsoft.onnxruntime:onnxruntime-android` dep (pick a stable 1.x)
-- [ ] Add ProGuard/R8 keep rules for ORT
-- [ ] Separate debug activity that loads Gemma 4 E2B ONNX (not yet wired into the IME)
-- [ ] Implement audio preprocessor (log-mel spectrogram per HF `preprocessor_config.json`)
-- [ ] Tokenizer wrapper — verify shipped `tokenizer.json` is loadable on Android
-- [ ] Build chat-template prompt with audio token interleaving (from `chat_template.jinja`)
-- [ ] Run encoder + decoder on a known WAV; print transcript
-- [ ] **Decision gate:** if unworkable, fall back to per-language Whisper (per PLAN.md §10)
+## M4a — ONNX infra + audio encoder validation  ✅ done
+- [x] Add `com.microsoft.onnxruntime:onnxruntime-android 1.20.0` dep
+- [x] Add ProGuard/R8 keep rules for ORT
+- [x] `AudioPreprocessor` — 128-bin log-mel, HTK scale, Hamming window, radix-2 FFT (no DSP deps)
+- [x] `AudioEncoderSession` — ORT wrapper loading `audio_encoder_q4f16.onnx` + sidecar `.onnx_data`
+- [x] `AsrDebugActivity` — standalone activity: record → preprocess → encode → print output
+- [x] Validated on-device (5.3 GB RAM): preprocess 313 ms, encoder load 1.36 s,
+      encoder forward 3.4 s for 5 s audio, output shape `[125, 1536]`, bool mask
+      (not int64 as originally guessed)
+
+## M4b — Tokenizer + decoder + end-to-end transcription  🚧 next
+- [ ] Pick tokenizer path: port tokenizer.json BPE loader to Kotlin / pre-convert
+      with ORT Extensions / third-party JVM tokenizer (investigate first)
+- [ ] `Tokenizer` wrapper — encode text prompt, decode token IDs → string
+- [ ] `EmbedTokensSession` — load `embed_tokens_q4f16.onnx`, produce `inputs_embeds`
+- [ ] Scatter op: replace positions where `input_ids == 258881` (audio_token_id)
+      with audio_features (already in 1536-dim hidden space — no projection needed)
+- [ ] `DecoderSession` — load `decoder_model_merged_q4f16.onnx`, manage KV cache
+      across 35 layers (sliding + full attention)
+- [ ] ASR prompt template (from `chat_template.jinja`): 
+      "Transcribe the following speech segment in English into English text..."
+      with `<boa>` `<audio>×125` `<eoa>` placeholders
+- [ ] Greedy decode loop with EOS stop (token IDs 1 or 106)
+- [ ] Wire into AsrDebugActivity: record → preprocess → encode → tokenize →
+      embed → scatter → decode → detokenize → print transcript
+- [ ] Measure end-to-end latency on device (expect 5-10 s for 5 s audio)
+- [ ] **Decision gate:** if transcription is garbage, the mel recipe is first
+      suspect (Hamming vs Povey, HTK vs Slaney, log vs log10); if latency is
+      unworkable, fall back to per-language Whisper
 
 ## M5 — Wire AsrEngine into IME (en-US only)  ⏸ pending
 - [ ] `AsrEngine` interface; `GemmaSession` impl using ORT

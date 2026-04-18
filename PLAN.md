@@ -109,7 +109,7 @@ Audio preprocessing is the riskiest unknown — confirm whether `onnx-community/
 - Manifest JSON in `assets/` lists each file + sha256 + byte size; the downloader streams from `https://huggingface.co/onnx-community/gemma-4-E2B-it-ONNX/resolve/main/<file>`, verifies hash, and atomically renames into place.
 - Foreground service shows progress; resumable via HTTP `Range`. WorkManager handles retries and Wi-Fi-only constraint (configurable).
 - Pre-flight checks before download starts: free disk ≥ 4 GB, total RAM ≥ 8 GB (warn at 8 GB, hard-block below 6 GB). Model alone needs ~3 GB resident; headroom is for OS + foreground app + IME.
-- `minSdk = 35` (Android 15) acts as a coarse hardware floor — by Android 15's release era (late 2024+) 8 GB RAM is the mid-range default. Android has no `minRam` manifest attribute, so true RAM enforcement happens at runtime in the pre-flight check above. For stricter filtering, also configure Play Console **device catalog → RAM ≥ 8 GB** when publishing.
+- `minSdk = 31` (Android 12) is the **current dev-iteration value** (lowered from 35 on 2026-04-18 so existing pre-Android-15 test devices can install). Android has no `minRam` manifest attribute, so RAM enforcement happens at runtime in the pre-flight check above. Before first public release, reconsider raising minSdk back to 33–35 and configure Play Console **device catalog → RAM ≥ 8 GB** as the true hardware floor.
 
 ---
 
