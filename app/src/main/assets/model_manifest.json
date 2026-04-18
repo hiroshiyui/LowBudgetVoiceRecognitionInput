@@ -1,0 +1,73 @@
+{
+  "modelId": "onnx-community/gemma-4-E2B-it-ONNX",
+  "revision": "main",
+  "variant": "q4f16",
+  "baseUrl": "https://huggingface.co/onnx-community/gemma-4-E2B-it-ONNX/resolve/main",
+  "files": [
+    {
+      "path": "config.json",
+      "sizeBytes": 5549,
+      "sha256": null
+    },
+    {
+      "path": "generation_config.json",
+      "sizeBytes": 238,
+      "sha256": null
+    },
+    {
+      "path": "preprocessor_config.json",
+      "sizeBytes": 43,
+      "sha256": null
+    },
+    {
+      "path": "processor_config.json",
+      "sizeBytes": 1689,
+      "sha256": null
+    },
+    {
+      "path": "chat_template.jinja",
+      "sizeBytes": 16317,
+      "sha256": null
+    },
+    {
+      "path": "tokenizer_config.json",
+      "sizeBytes": 2094,
+      "sha256": null
+    },
+    {
+      "path": "tokenizer.json",
+      "sizeBytes": 19439251,
+      "sha256": "47bd35616c7c782aaca6ccf48c75f3461d5877170984b8836b375107d0a9f566"
+    },
+    {
+      "path": "onnx/audio_encoder_q4f16.onnx",
+      "sizeBytes": 260446,
+      "sha256": "5e0deb22791685c792d4b8e089deef9670fa4a4cecde434213d6a742e58fc3fa"
+    },
+    {
+      "path": "onnx/audio_encoder_q4f16.onnx_data",
+      "sizeBytes": 171258112,
+      "sha256": "df58e61a00bafa9449ee5fd52895ce952f158bbdd1fe38df8a68f48f36842e62"
+    },
+    {
+      "path": "onnx/embed_tokens_q4f16.onnx",
+      "sizeBytes": 5621,
+      "sha256": "d7ca53f6a169471b5699b2f57ee4c7aa2c73732b0152f3909e64b71384444825"
+    },
+    {
+      "path": "onnx/embed_tokens_q4f16.onnx_data",
+      "sizeBytes": 1590689792,
+      "sha256": "024b199e6358ed42970f807686add5f9430d7e254ca7ce22fc9c83f015b9c517"
+    },
+    {
+      "path": "onnx/decoder_model_merged_q4f16.onnx",
+      "sizeBytes": 673231,
+      "sha256": "73c0f1fe04f9a3a048fb3319c0671b6cf0346bf33a3a8624c853bcffe01c24a4"
+    },
+    {
+      "path": "onnx/decoder_model_merged_q4f16.onnx_data",
+      "sizeBytes": 1519700992,
+      "sha256": "3b27245a7396cb7039a4e4118bd2a8aa35106bae381522edf7c4867b5f22bb10"
+    }
+  ]
+}
