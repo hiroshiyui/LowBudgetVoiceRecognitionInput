@@ -138,7 +138,7 @@ class BreezeAsrRunner(
             }
             phases += Phase("decode", SystemClock.elapsedRealtime() - loopStart)
 
-            val transcript = tokenizer.decodePlain(generated.toIntArray(), skipSpecials = true)
+            val transcript = tokenizer.decodeBase64(generated.toIntArray(), skipSpecials = true)
             return Result(transcript, generated.toIntArray(), phases, firstPredicted)
         } finally {
             step?.close()
