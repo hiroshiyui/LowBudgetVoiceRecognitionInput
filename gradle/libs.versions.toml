@@ -9,7 +9,7 @@ activityCompose = "1.13.0"
 kotlin = "2.2.10"
 composeBom = "2025.12.00"
 okhttp = "4.12.0"
-onnxruntime = "1.20.0"
+onnxruntime = "1.24.3"
 workManager = "2.10.0"
 dataStore = "1.1.7"
 

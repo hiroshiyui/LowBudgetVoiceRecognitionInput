@@ -1,6 +1,6 @@
 # TODO
 
-Tracks milestones from PLAN.md. M1–M3 + M4a complete; M4b is next.
+Tracks milestones from PLAN.md. M1–M4 complete end-to-end; M5 is next.
 
 ## M1 — Project plumbing  ✅ done
 - [x] Add `RECORD_AUDIO` + `INTERNET` permissions in AndroidManifest
@@ -42,25 +42,41 @@ Tracks milestones from PLAN.md. M1–M3 + M4a complete; M4b is next.
       encoder forward 3.4 s for 5 s audio, output shape `[125, 1536]`, bool mask
       (not int64 as originally guessed)
 
-## M4b — Tokenizer + decoder + end-to-end transcription  🚧 next
-- [ ] Pick tokenizer path: port tokenizer.json BPE loader to Kotlin / pre-convert
-      with ORT Extensions / third-party JVM tokenizer (investigate first)
-- [ ] `Tokenizer` wrapper — encode text prompt, decode token IDs → string
-- [ ] `EmbedTokensSession` — load `embed_tokens_q4f16.onnx`, produce `inputs_embeds`
-- [ ] Scatter op: replace positions where `input_ids == 258881` (audio_token_id)
-      with audio_features (already in 1536-dim hidden space — no projection needed)
-- [ ] `DecoderSession` — load `decoder_model_merged_q4f16.onnx`, manage KV cache
-      across 35 layers (sliding + full attention)
-- [ ] ASR prompt template (from `chat_template.jinja`): 
-      "Transcribe the following speech segment in English into English text..."
-      with `<boa>` `<audio>×125` `<eoa>` placeholders
-- [ ] Greedy decode loop with EOS stop (token IDs 1 or 106)
-- [ ] Wire into AsrDebugActivity: record → preprocess → encode → tokenize →
-      embed → scatter → decode → detokenize → print transcript
-- [ ] Measure end-to-end latency on device (expect 5-10 s for 5 s audio)
-- [ ] **Decision gate:** if transcription is garbage, the mel recipe is first
-      suspect (Hamming vs Povey, HTK vs Slaney, log vs log10); if latency is
-      unworkable, fall back to per-language Whisper
+## M4b — Tokenizer + decoder + end-to-end transcription  ✅ done
+- [x] Pure-Kotlin `GemmaTokenizer` — BPE with byte-fallback, SentencePiece metaspace
+      (no external deps; DJL / ORT-Extensions / onnxruntime-genai all failed to
+      produce an Android arm64 tokenizer)
+- [x] `EmbedTokensSession` — returns both `inputs_embeds` (1536) AND
+      `per_layer_inputs` (35 × 256); both are required by the decoder
+- [x] `AudioScatter` — overwrites embedding rows at positions where
+      `input_ids == 258881` with audio_features rows
+- [x] `DecoderSession` — merged prefill + decode with KV cache management across
+      15 KV-cached layers (20 layers share), mixed head_dim (256 sliding / 512
+      full for layers 4, 9, 14); ORT 1.24.3 for the newer `GatherBlockQuantized`
+      and `GroupQueryAttention` ops
+- [x] `Fp16` — manual binary16 → float32 conversion (Java 20+'s `Float.float16ToFloat`
+      not available on our minSdk)
+- [x] `AsrPrompt` — hardcoded chat-template prompt for all six languages,
+      with `<|audio|>` repeated numAudioTokens times
+- [x] Greedy decode loop with EOS stop (ids 1 or 106)
+- [x] Full pipeline wired in `AsrDebugActivity` with top-5 logit diagnostics,
+      prompt-tail decoding, and auto-save to `getExternalFilesDir()/logs/`
+- [x] **Validated on-device** (5.3 GB RAM): 5 s audio → transcript in 47 s
+      (prefill 25 s / 163 prompt tokens, decode 5.4 s/token); correctness
+      proven on text-only continuation test ("capital of France is" → "Paris.")
+- [x] Tokenizer bug fixed: metaspace `▁` was being prepended between every
+      special token, corrupting the chat-template structure — now only emitted
+      at the very start of the input
+- [x] RAM mitigation: embed_tokens reopened briefly per decode step so
+      embed_tokens (1.5 GB) + decoder (1.4 GB) aren't held together on
+      low-RAM devices — prevented kswapd thrashing
+
+## M4 follow-ups (quality + speed, not blocking M5)
+- [ ] Try NNAPI execution provider on the decoder (potential 2-5× speedup)
+- [ ] Verify mel preprocessing matches Gemma's reference (Hamming vs Povey;
+      log-mel vs power-mel): iterate if transcripts hear "Hallo" for "Hello"
+- [ ] Test transcription quality on longer audio (10–30 s) and other languages
+- [ ] Measure on ≥8 GB device to establish the realistic IME latency budget
 
 ## M5 — Wire AsrEngine into IME (en-US only)  ⏸ pending
 - [ ] `AsrEngine` interface; `GemmaSession` impl using ORT

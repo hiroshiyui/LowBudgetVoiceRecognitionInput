@@ -33,28 +33,36 @@ class GemmaTokenizer private constructor(
     /** Encode plain text into token IDs. Does NOT add BOS / chat turn markers — caller handles those. */
     fun encode(text: String): IntArray {
         val out = ArrayList<Int>(text.length)
-        encodeSegment(text, out)
+        encodeSegment(text, out, prependMetaspace = true)
         return out.toIntArray()
     }
 
     /**
      * Encode text with awareness of added-token strings. Any occurrence of a special-token
      * string (e.g. `<|audio|>`, `<bos>`) is emitted as its own ID and the surrounding text
-     * is BPE-encoded separately.
+     * is BPE-encoded separately. SentencePiece metaspace is only prepended at the very
+     * start of the input — never between consecutive special tokens, which would corrupt
+     * the chat-template structure (extra `▁` tokens between `<turn|>` and `\n`, etc).
      */
     fun encodeWithSpecials(text: String): IntArray {
         val out = ArrayList<Int>(text.length)
         var cursor = 0
+        var atInputStart = true
         while (cursor < text.length) {
             val nextMatch = findNextAddedToken(text, cursor)
             if (nextMatch == null) {
-                encodeSegment(text.substring(cursor), out)
+                encodeSegment(text.substring(cursor), out, prependMetaspace = atInputStart)
                 break
             }
             if (nextMatch.start > cursor) {
-                encodeSegment(text.substring(cursor, nextMatch.start), out)
+                encodeSegment(
+                    text.substring(cursor, nextMatch.start),
+                    out,
+                    prependMetaspace = atInputStart,
+                )
             }
             out.add(nextMatch.token.id)
+            atInputStart = false
             cursor = nextMatch.start + nextMatch.token.content.length
         }
         return out.toIntArray()
@@ -103,11 +111,15 @@ class GemmaTokenizer private constructor(
         return best
     }
 
-    private fun encodeSegment(segment: String, out: MutableList<Int>) {
+    private fun encodeSegment(segment: String, out: MutableList<Int>, prependMetaspace: Boolean) {
         if (segment.isEmpty()) return
-        // SentencePiece metaspace: leading and internal spaces become ▁.
+        // SentencePiece metaspace: internal spaces always become ▁. The leading ▁ is only
+        // added when we're at the very start of the input — otherwise segments that begin
+        // with non-space characters right after a special token (e.g. `<|turn>model\n`'s
+        // "model\n" portion) or pure whitespace segments (`<turn|>\n<|turn>`'s "\n") get
+        // a spurious `▁` that the model was never trained to see.
         val withMeta = buildString(segment.length + 1) {
-            if (segment[0] != ' ') append('\u2581')
+            if (prependMetaspace && segment[0] != ' ') append('\u2581')
             for (ch in segment) {
                 if (ch == ' ') append('\u2581') else append(ch)
             }
