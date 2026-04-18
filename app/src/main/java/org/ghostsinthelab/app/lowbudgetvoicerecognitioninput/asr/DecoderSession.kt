@@ -39,16 +39,16 @@ class DecoderSession(
 
     val inputSummary: Map<String, String>
     val outputSummary: Map<String, String>
+    val executionProvider: String
 
     private val kvCache: Array<OnnxTensor?> = arrayOfNulls(2 * NUM_KV_CACHED_LAYERS)
     private var pastSeqLen: Int = 0
 
     init {
         require(modelFile.exists()) { "Model file not found: $modelFile" }
-        val opts = OrtSession.SessionOptions().apply {
-            setOptimizationLevel(OrtSession.SessionOptions.OptLevel.BASIC_OPT)
-        }
-        session = env.createSession(modelFile.absolutePath, opts)
+        val (s, ep) = AsrSessionOptions.openSession(env, modelFile)
+        session = s
+        executionProvider = ep
         inputSummary = session.inputInfo.mapValues { (_, v) -> v.info.toString() }
         outputSummary = session.outputInfo.mapValues { (_, v) -> v.info.toString() }
     }

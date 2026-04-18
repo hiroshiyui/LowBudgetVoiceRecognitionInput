@@ -217,10 +217,15 @@ private suspend fun runPipeline(context: Context, log: (String) -> Unit) {
 
     log("")
     log("3. Audio encoder (open → encode → close)…")
+    var audioEp = ""
     val (audioFeatures, tEnc) = timed {
-        AudioEncoderSession(audioEncoderFile).use { it.encode(mel) }
+        AudioEncoderSession(audioEncoderFile).use {
+            audioEp = it.executionProvider
+            it.encode(mel)
+        }
     }
     val numAudioTokens = audioFeatures.shape[0].toInt()
+    log("   EP: $audioEp")
     log("   ${audioFeatures.shape.toList()} in $tEnc ms (→ $numAudioTokens audio tokens)")
 
     log("")
@@ -242,7 +247,12 @@ private suspend fun runPipeline(context: Context, log: (String) -> Unit) {
 
     log("")
     log("6. Embedding prompt (open → embed → close)…")
-    val embeds = EmbedTokensSession(embedFile).use { it.embed(ids) }
+    var embedEp = ""
+    val embeds = EmbedTokensSession(embedFile).use {
+        embedEp = it.executionProvider
+        it.embed(ids)
+    }
+    log("   EP: $embedEp")
     log("   inputs_embeds: ${embeds.inputsEmbeds.size} floats")
 
     // Sanity: magnitudes of text embeddings vs audio features
@@ -275,6 +285,7 @@ private suspend fun runPipeline(context: Context, log: (String) -> Unit) {
     val (decoder, tDecLoad) = timed {
         withContext(Dispatchers.IO) { DecoderSession(decoderFile) }
     }
+    log("   EP: ${decoder.executionProvider}")
     log("   $tDecLoad ms")
 
     val transcript: String
