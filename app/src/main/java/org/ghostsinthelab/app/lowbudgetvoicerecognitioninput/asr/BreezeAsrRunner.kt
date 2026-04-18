@@ -1,7 +1,10 @@
 package org.ghostsinthelab.app.lowbudgetvoicerecognitioninput.asr
 
 import android.os.SystemClock
+import android.util.Log
 import java.io.File
+
+private const val TAG = "BreezeAsr"
 
 /**
  * Runs a single push-to-talk utterance end-to-end through Breeze-ASR-25:
@@ -55,25 +58,42 @@ class BreezeAsrRunner(
     ): Result {
         val phases = ArrayList<Phase>()
 
+        Log.d(TAG, "phase=preprocess start (pcm=${pcm.size} melFrames=$melFrames)")
         val mel = timed("preprocess", phases) {
             WhisperPreprocessor(numFrames = melFrames).process(pcm)
         }
+        Log.d(TAG, "phase=preprocess done (${mel.size} mel values)")
 
+        Log.d(TAG, "phase=tokenizer start")
         val tokenizer = timed("tokenizer", phases) {
             WhisperTokenizer.load(tokensFile)
         }
+        Log.d(TAG, "phase=tokenizer done (vocab=${tokenizer.vocabSize})")
         val specials = tokenizer.specialIds()
         val langId = specials.languageIds[language]
             ?: specials.languageIds["en"]
             ?: error("No matching language token for '$language' (and no en fallback)")
 
-        val cross = timed("encoder", phases) {
-            WhisperEncoder(encoderFile).use { it.encode(mel, numFrames = melFrames) }
+        Log.d(TAG, "phase=encoder-load start")
+        val encoder = WhisperEncoder(encoderFile)
+        Log.d(TAG, "phase=encoder-load done (EP=${encoder.executionProvider})")
+        val cross = try {
+            Log.d(TAG, "phase=encoder-run start")
+            val result = timed("encoder", phases) { encoder.encode(mel, numFrames = melFrames) }
+            Log.d(TAG, "phase=encoder-run done")
+            result
+        } finally {
+            Log.d(TAG, "phase=encoder-close start")
+            encoder.close()
+            Log.d(TAG, "phase=encoder-close done")
         }
 
         try {
-            return WhisperDecoder(decoderFile).use { decoder ->
-                runDecodeLoop(
+            Log.d(TAG, "phase=decoder-load start (${decoderFile.length() / 1_048_576} MiB)")
+            val decoder = WhisperDecoder(decoderFile)
+            Log.d(TAG, "phase=decoder-load done (EP=${decoder.executionProvider})")
+            try {
+                return runDecodeLoop(
                     decoder = decoder,
                     tokenizer = tokenizer,
                     cross = cross,
@@ -83,6 +103,10 @@ class BreezeAsrRunner(
                     phases = phases,
                     onProgress = onProgress,
                 )
+            } finally {
+                Log.d(TAG, "phase=decoder-close start")
+                decoder.close()
+                Log.d(TAG, "phase=decoder-close done")
             }
         } finally {
             cross.close()
@@ -106,11 +130,14 @@ class BreezeAsrRunner(
             specials.notimestamps,
         )
 
+        Log.d(TAG, "phase=empty-selfcache start")
         val (initK, initV) = decoder.emptySelfCache()
+        Log.d(TAG, "phase=empty-selfcache done")
         var step: WhisperDecoder.Step? = null
         val generated = ArrayList<Int>()
         var firstPredicted = -1
         try {
+            Log.d(TAG, "phase=prefill start (prompt=${prefixIds.toList()})")
             val prefill = timed("prefill", phases) {
                 decoder.forward(
                     tokens = prefixIds.map { it.toLong() }.toLongArray(),
@@ -120,10 +147,12 @@ class BreezeAsrRunner(
                     offset = 0L,
                 )
             }
+            Log.d(TAG, "phase=prefill done")
             step = prefill
             var offset = prefixIds.size.toLong()
             var nextId = argmaxLastRow(prefill.logits)
             firstPredicted = nextId
+            Log.d(TAG, "phase=prefill firstPredicted=$nextId")
 
             val loopStart = SystemClock.elapsedRealtime()
             var stepCount = 0

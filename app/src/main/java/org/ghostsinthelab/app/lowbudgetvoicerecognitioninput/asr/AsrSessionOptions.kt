@@ -29,9 +29,7 @@ object AsrSessionOptions {
         useNnapi: Boolean = false,
     ): Pair<OrtSession, String> {
         if (useNnapi) {
-            val opts = OrtSession.SessionOptions().apply {
-                setOptimizationLevel(OrtSession.SessionOptions.OptLevel.BASIC_OPT)
-            }
+            val opts = buildCpuOptions()
             try {
                 opts.addNnapi(EnumSet.of(NNAPIFlags.USE_FP16))
                 val session = env.createSession(modelFile.absolutePath, opts)
@@ -45,9 +43,23 @@ object AsrSessionOptions {
     }
 
     private fun openCpu(env: OrtEnvironment, modelFile: File): OrtSession {
-        val opts = OrtSession.SessionOptions().apply {
+        return env.createSession(modelFile.absolutePath, buildCpuOptions())
+    }
+
+    /**
+     * Peak memory matters more than throughput on our 5 GB target device:
+     *   - `setMemoryPatternOptimization(false)` disables the allocator's
+     *     dynamic-shape prediction that tends to over-allocate arenas.
+     *   - `setCPUArenaAllocator(false)` returns memory to the system
+     *     between tensors instead of keeping it pooled.
+     * Both are known to shave hundreds of MB off ORT peak RSS on Whisper-
+     * family models at the cost of ~10-30% throughput.
+     */
+    private fun buildCpuOptions(): OrtSession.SessionOptions {
+        return OrtSession.SessionOptions().apply {
             setOptimizationLevel(OrtSession.SessionOptions.OptLevel.BASIC_OPT)
+            setMemoryPatternOptimization(false)
+            setCPUArenaAllocator(false)
         }
-        return env.createSession(modelFile.absolutePath, opts)
     }
 }
