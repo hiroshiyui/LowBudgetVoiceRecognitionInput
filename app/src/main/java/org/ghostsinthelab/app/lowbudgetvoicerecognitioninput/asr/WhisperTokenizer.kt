@@ -36,7 +36,7 @@ class WhisperTokenizer private constructor(
         val sb = StringBuilder()
         for (id in ids) {
             val piece = pieceOf(id) ?: continue
-            if (skipSpecials && piece.startsWith("<|") && piece.endsWith("|>")) continue
+            if (skipSpecials && isSpecialId(id)) continue
             sb.append(piece)
         }
         return sb.toString()
@@ -50,13 +50,37 @@ class WhisperTokenizer private constructor(
         val bytes = java.io.ByteArrayOutputStream()
         for (id in ids) {
             val piece = pieceOf(id) ?: continue
-            if (skipSpecials && piece.startsWith("<|") && piece.endsWith("|>")) continue
+            if (skipSpecials && isSpecialId(id)) continue
             for (ch in piece) {
                 val b = unicodeToByte[ch.code] ?: ch.code
                 bytes.write(b)
             }
         }
         return bytes.toString("UTF-8")
+    }
+
+    /**
+     * Decodes assuming each piece is base64-encoded raw bytes
+     * (sherpa-onnx's Whisper tokens.txt format).
+     */
+    fun decodeBase64(ids: IntArray, skipSpecials: Boolean = true): String {
+        val bytes = java.io.ByteArrayOutputStream()
+        for (id in ids) {
+            val piece = pieceOf(id) ?: continue
+            if (skipSpecials && isSpecialId(id)) continue
+            try {
+                bytes.write(android.util.Base64.decode(piece, android.util.Base64.DEFAULT))
+            } catch (_: IllegalArgumentException) {
+                // Non-base64 piece (e.g. literal '<|…|>' specials in some exporters) — pass through
+                bytes.write(piece.toByteArray(Charsets.UTF_8))
+            }
+        }
+        return bytes.toString("UTF-8")
+    }
+
+    private fun isSpecialId(id: Int): Boolean {
+        val piece = pieceOf(id) ?: return false
+        return piece.startsWith("<|") && piece.endsWith("|>")
     }
 
     /**
@@ -72,17 +96,25 @@ class WhisperTokenizer private constructor(
         val languageIds: Map<String, Int>, // "en" -> id, "zh" -> id, ...
     )
 
-    fun specialIds(): SpecialIds {
-        val langs = listOf("en", "zh", "ja", "ko")
-        val langIds = langs.mapNotNull { l -> idOf("<|$l|>")?.let { l to it } }.toMap()
-        return SpecialIds(
-            startOfTranscript = idOf("<|startoftranscript|>") ?: error("missing sot"),
-            transcribe = idOf("<|transcribe|>") ?: error("missing transcribe"),
-            notimestamps = idOf("<|notimestamps|>") ?: error("missing notimestamps"),
-            endOfText = idOf("<|endoftext|>") ?: error("missing endoftext"),
-            languageIds = langIds,
-        )
-    }
+    /**
+     * Whisper-large-v2 has fixed special-token IDs that aren't written into
+     * sherpa-onnx's tokens.txt (only the 50257 GPT-2 BPE pieces are there).
+     * We return the canonical hardcoded IDs. Order is from openai/whisper's
+     * tokenizer.py: `<|endoftext|>`, `<|startoftranscript|>`, 99 language
+     * tokens (en=50259, zh=50260, …), `<|translate|>`, `<|transcribe|>`,
+     * `<|startoflm|>`, `<|startofprev|>`, `<|nospeech|>`, `<|notimestamps|>`,
+     * 1501 timestamp tokens.
+     */
+    fun specialIds(): SpecialIds = SpecialIds(
+        startOfTranscript = 50258,
+        transcribe = 50359,
+        notimestamps = 50363,
+        endOfText = 50257,
+        languageIds = mapOf(
+            "en" to 50259,
+            "zh" to 50260,
+        ),
+    )
 
     companion object {
         fun load(tokensFile: File): WhisperTokenizer {

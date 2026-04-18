@@ -713,43 +713,55 @@ private suspend fun runBreezeTokenizerTest(context: Context, log: (String) -> Un
         manifest.files.first { it.path == "breeze-asr-25-half-tokens.txt" }
     )
 
-    log("1. Loading tokens.txt …")
+    log("1. File stats…")
+    val rawLineCount = withContext(Dispatchers.IO) { tokensFile.useLines { it.count() } }
+    log("   ${tokensFile.length()} bytes, $rawLineCount lines")
+
+    log("")
+    log("2. Raw first 5 lines (exact bytes):")
+    withContext(Dispatchers.IO) {
+        tokensFile.useLines { seq ->
+            seq.take(5).forEach { log("   | $it") }
+        }
+    }
+    log("")
+    log("3. Raw last 5 lines:")
+    withContext(Dispatchers.IO) {
+        val tail = ArrayDeque<String>()
+        tokensFile.useLines { seq -> seq.forEach { tail += it; if (tail.size > 5) tail.removeFirst() } }
+        tail.forEach { log("   | $it") }
+    }
+
+    log("")
+    log("4. Loading parser …")
     val (tok, t) = timed {
         withContext(Dispatchers.IO) { WhisperTokenizer.load(tokensFile) }
     }
-    log("   vocab size ${tok.vocabSize} in $t ms")
+    log("   parsed vocab size ${tok.vocabSize} in $t ms")
 
     log("")
-    log("2. Special token IDs …")
-    runCatching {
-        val s = tok.specialIds()
-        log("   <|startoftranscript|> = ${s.startOfTranscript}")
-        log("   <|transcribe|>        = ${s.transcribe}")
-        log("   <|notimestamps|>      = ${s.notimestamps}")
-        log("   <|endoftext|>         = ${s.endOfText}")
-        for ((lang, id) in s.languageIds) log("   <|$lang|>               = $id")
-    }.onFailure { log("   lookup failed: ${it.message}") }
+    log("5. Hardcoded Whisper special IDs (from tokenizer.py canonical order):")
+    val s = tok.specialIds()
+    log("   <|endoftext|>         = ${s.endOfText}")
+    log("   <|startoftranscript|> = ${s.startOfTranscript}")
+    log("   <|transcribe|>        = ${s.transcribe}")
+    log("   <|notimestamps|>      = ${s.notimestamps}")
+    for ((lang, id) in s.languageIds) log("   <|$lang|>               = $id")
 
     log("")
-    log("3. Sample pieces (ids 50256, 50257, 50258, 220, 262, 11, 257)…")
-    for (id in listOf(50256, 50257, 50258, 220, 262, 11, 257)) {
-        val p = tok.pieceOf(id) ?: "(none)"
-        val quoted = p.take(30).replace("\n", "\\n").replace("\t", "\\t")
-        log("   $id -> '$quoted'")
+    log("6. Sample pieces near ID 50256–50260 (BPE/special boundary):")
+    for (id in 50254..50262) {
+        val p = tok.pieceOf(id)
+        log("   $id -> ${if (p == null) "(none)" else "'${p.take(40)}'"}")
     }
 
     log("")
-    log("4. decodePlain vs decodeByteLevel on a known English fragment…")
-    val hello = tok.idOf("hello") ?: tok.idOf(" hello") ?: tok.idOf("Hello") ?: -1
-    val world = tok.idOf("world") ?: tok.idOf(" world") ?: tok.idOf("World") ?: -1
-    if (hello > 0 && world > 0) {
-        val ids = intArrayOf(hello, world)
-        log("   ids = ${ids.toList()}")
-        log("   plain     = '${tok.decodePlain(ids)}'")
-        log("   bytelevel = '${tok.decodeByteLevel(ids)}'")
-    } else {
-        log("   couldn't find hello/world in vocab — pick canonical IDs after inspecting output")
-    }
+    log("7. Decode paths on ids [' ', ' a', ','] (220, 257, 11)…")
+    val ids = intArrayOf(220, 257, 11)
+    log("   ids = ${ids.toList()}")
+    log("   plain     = '${tok.decodePlain(ids)}'")
+    log("   bytelevel = '${tok.decodeByteLevel(ids)}'")
+    log("   base64    = '${tok.decodeBase64(ids)}'")
 }
 
 private suspend fun runInspectBreezeEncoder(context: Context, log: (String) -> Unit) {

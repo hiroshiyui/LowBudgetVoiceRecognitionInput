@@ -38,8 +38,19 @@ class WhisperPreprocessor(
         require(frameLength <= fftLength) { "frameLength must fit in fftLength" }
     }
 
-    /** Total audio samples the encoder expects (fixed 30 s at 16 kHz). */
+    /** Target audio length from the user's perspective (30 s @ 16 kHz). */
     val numSamples: Int = hopLength * numFrames  // 480_000
+
+    /**
+     * Internal buffer size — must accommodate the last frame's tail, which
+     * ends at `(numFrames - 1) * hopLength + frameLength` (480 240 with the
+     * canonical 3000/160/400 values). Whisper's reference uses `center=True`
+     * reflection padding which yields 480 400 and one extra frame that gets
+     * dropped — we use zero-padded non-centered framing for simplicity; the
+     * first ~200 ms of the mel spectrogram differs slightly from reference
+     * but doesn't affect the encoder's shape contract.
+     */
+    private val paddedSamples: Int = (numFrames - 1) * hopLength + frameLength
 
     private val hannWindow: FloatArray = FloatArray(frameLength) { i ->
         (0.5 - 0.5 * cos(2.0 * PI * i / (frameLength - 1))).toFloat()
@@ -96,7 +107,7 @@ class WhisperPreprocessor(
     }
 
     private fun padOrTruncate(pcm: ShortArray): FloatArray {
-        val audio = FloatArray(numSamples)
+        val audio = FloatArray(paddedSamples)
         val n = min(pcm.size, numSamples)
         for (i in 0 until n) audio[i] = pcm[i] / 32768f
         return audio
