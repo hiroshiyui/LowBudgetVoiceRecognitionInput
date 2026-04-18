@@ -18,8 +18,6 @@ object AsrPrompt {
         "en-GB" to "Transcribe the following speech segment in English (UK) into English text. Only output the transcription, with no extra commentary.",
         "zh-Hant-TW" to "請將以下語音段落轉錄為繁體中文（台灣）文字，只輸出轉錄結果，不要加任何說明。",
         "zh-Hans-CN" to "请将以下语音段落转录为简体中文（中国大陆）文字，只输出转录结果，不要加任何说明。",
-        "ja" to "以下の音声を日本語の文字に書き起こしてください。書き起こしのみを出力し、余計な説明は一切加えないでください。",
-        "ko" to "다음 음성을 한국어 문자로 전사하세요. 전사 결과만 출력하고 다른 설명은 하지 마세요.",
     )
 
     fun render(numAudioTokens: Int, language: String = "en-US"): String {

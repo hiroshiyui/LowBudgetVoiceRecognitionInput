@@ -27,16 +27,4 @@
         android:imeSubtypeMode="voice"
         android:isAsciiCapable="true"
         android:subtypeId="0x04" />
-    <subtype
-        android:label="@string/subtype_ja"
-        android:imeSubtypeLocale="ja_JP"
-        android:imeSubtypeMode="voice"
-        android:isAsciiCapable="false"
-        android:subtypeId="0x05" />
-    <subtype
-        android:label="@string/subtype_ko"
-        android:imeSubtypeLocale="ko_KR"
-        android:imeSubtypeMode="voice"
-        android:isAsciiCapable="false"
-        android:subtypeId="0x06" />
 </input-method>

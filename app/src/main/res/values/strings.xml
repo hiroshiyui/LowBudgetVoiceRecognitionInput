@@ -10,8 +10,6 @@
     <string name="subtype_zh_hans_cn">中文 (中国大陆)</string>
     <string name="subtype_en_us">English (US)</string>
     <string name="subtype_en_gb">English (UK)</string>
-    <string name="subtype_ja">日本語</string>
-    <string name="subtype_ko">한국어</string>
 
     <!-- Settings screen -->
     <string name="settings_title">Voice IME setup</string>
@@ -22,7 +20,7 @@
     <string name="settings_step_pick_body">Switch your active keyboard to Voice IME.</string>
     <string name="settings_step_pick_action">Open input method picker</string>
     <string name="settings_step_model_title">3. Download model</string>
-    <string name="settings_step_model_body">Coming in a later milestone — Gemma 4 E2B (~2–3 GB).</string>
+    <string name="settings_step_model_body">Downloads the on-device speech model (~1.8 GB).</string>
     <string name="settings_status_enabled">IME is enabled</string>
     <string name="settings_status_disabled">IME is not enabled</string>
 </resources>

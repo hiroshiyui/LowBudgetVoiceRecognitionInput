@@ -1,6 +1,25 @@
 # LowBudgetVoiceRecognitionInput — Implementation Plan
 
-On-device speech-to-text Android IME powered by Gemma 4 E2B (ONNX). Six languages: zh-Hant-TW, zh-Hans-CN, en-US, en-GB, ja, ko.
+On-device speech-to-text Android IME. **Four languages:** zh-Hant-TW, zh-Hans-CN, en-US, en-GB.
+
+> **Scope update 2026-04-18** — supersedes the Gemma 4 E2B plan below:
+> - Dropped Japanese and Korean. IME now targets 4 languages.
+> - Pivoting from **Gemma 4 E2B (raw onnxruntime-android)** to
+>   **MediaTek-Research/Breeze-ASR-25** (Whisper-large-v2 fine-tune, native
+>   Traditional Chinese, int8 ~1.78 GB) via **sherpa-onnx**.
+> - Gemma got end-to-end transcription working on-device ("Hallo"/"あの"
+>   for 5 s of audio in ~47 s wall time) but is 9.4× realtime on a 5.3 GB
+>   phone — unusable as an IME. Breeze-ASR-25 is purpose-built for ASR,
+>   smaller, faster, and outputs Traditional Chinese natively.
+> - The design/UX decisions below (push-to-talk, manual language switch,
+>   download on first launch, minSdk/RAM gates) still apply. The parts
+>   that are Gemma-specific (per-layer inputs, KV-sharing, chat template,
+>   custom tokenizer) are being replaced by sherpa-onnx's offline Whisper
+>   runtime — a high-level "PCM in, text out" API.
+>
+> See memory files `project_language_scope_reduction.md` and
+> `project_pivot_to_breeze_asr.md` for the full rationale. The Gemma
+> text below is preserved as historical record of how we got here.
 
 ---
 

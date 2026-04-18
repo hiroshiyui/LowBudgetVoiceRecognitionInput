@@ -1,11 +1,13 @@
 # TODO
 
-Tracks milestones from PLAN.md. M1–M4 complete end-to-end; M5 is next.
+**Scope change 2026-04-18:** dropped Japanese and Korean; IME now targets 4 languages (zh-Hant-TW, zh-Hans-CN, en-US, en-GB). Pivoting the ASR engine from Gemma 4 E2B (raw onnxruntime-android) to **MediaTek-Research/Breeze-ASR-25** via **sherpa-onnx** for native Traditional Chinese output + near-realtime latency. Gemma code stays working until Breeze is validated end-to-end.
+
+Tracks milestones from PLAN.md. M1–M4 complete end-to-end on Gemma; M4-bridge (Breeze pivot) is next before M5.
 
 ## M1 — Project plumbing  ✅ done
 - [x] Add `RECORD_AUDIO` + `INTERNET` permissions in AndroidManifest
 - [x] Register `VoiceImeService` with `BIND_INPUT_METHOD` and `android.view.im` meta-data
-- [x] Create `res/xml/method.xml` with 6 IME subtypes (zh-Hant-TW, zh-Hans-CN, en-US, en-GB, ja, ko)
+- [x] Create `res/xml/method.xml` with 4 IME subtypes (zh-Hant-TW, zh-Hans-CN, en-US, en-GB) — was 6, dropped ja/ko 2026-04-18
 - [x] `VoiceImeService` skeleton with placeholder bar (200 dp)
 - [x] Add IME label, subtype labels, and settings strings
 - [x] Rewrite `MainActivity` as a 3-step Compose setup screen
@@ -71,12 +73,35 @@ Tracks milestones from PLAN.md. M1–M4 complete end-to-end; M5 is next.
       embed_tokens (1.5 GB) + decoder (1.4 GB) aren't held together on
       low-RAM devices — prevented kswapd thrashing
 
-## M4 follow-ups (quality + speed, not blocking M5)
-- [ ] Try NNAPI execution provider on the decoder (potential 2-5× speedup)
-- [ ] Verify mel preprocessing matches Gemma's reference (Hamming vs Povey;
-      log-mel vs power-mel): iterate if transcripts hear "Hallo" for "Hello"
-- [ ] Test transcription quality on longer audio (10–30 s) and other languages
-- [ ] Measure on ≥8 GB device to establish the realistic IME latency budget
+## M4 follow-ups (mostly superseded by the Breeze pivot)
+- [x] Try NNAPI execution provider on the decoder — attempted 2026-04-18,
+      +70% wall time on this device due to partitioning around custom
+      com.microsoft ops; disabled by default, scaffolding kept
+- [ ] ~~Verify mel preprocessing matches Gemma's reference~~ — moot after pivot;
+      sherpa-onnx does Whisper mel internally
+- [ ] ~~Test transcription quality on ja/ko~~ — dropped from scope 2026-04-18
+
+## M4-bridge — Pivot to Breeze-ASR-25 via sherpa-onnx  🚧 next
+- [ ] Download `sherpa-onnx-<latest>.aar` from GitHub Releases, place in
+      `app/libs/`, wire via `implementation(files("libs/..."))`
+- [ ] Add `abiFilters = listOf("arm64-v8a")` to trim the 54 MB AAR
+- [ ] Drop `onnxruntime-android` dep from build.gradle.kts (sherpa-onnx
+      bundles its own ORT) — or keep until Gemma code is gone
+- [ ] Update `assets/model_manifest.json` to point to
+      `MediaTek-Research/Breeze-ASR-25-onnx-250806` int8 variant:
+      encoder (766 MB) + decoder (1.01 GB) + tokens.txt (~817 kB) ≈ 1.78 GB
+- [ ] Compute SHA-256 of each file at build time (HF LFS pointers expose
+      `oid sha256:...` via the `raw/main/` URL) and bake into the manifest
+- [ ] Write a `BreezeAsrSession` Kotlin wrapper that uses `OfflineRecognizer`
+      + `OfflineStream` API: accepts ShortArray PCM, returns transcript
+- [ ] Wire per-IME-subtype `language` code: "zh" for both zh subtypes,
+      "en" for both en subtypes (OfflineWhisperModelConfig.language)
+- [ ] Add a "Test Breeze" button to AsrDebugActivity for on-device validation
+- [ ] Measure latency — expected near-realtime on a 5.3 GB device given
+      int8 quantization and sherpa-onnx's optimized Whisper path
+- [ ] Once validated end-to-end, delete `asr/` Gemma files: AudioPreprocessor,
+      AudioEncoderSession, EmbedTokensSession, DecoderSession, AudioScatter,
+      Fp16, GemmaTokenizer, AsrPrompt, AsrSessionOptions (keep AudioCapture)
 
 ## M5 — Wire AsrEngine into IME (en-US only)  ⏸ pending
 - [ ] `AsrEngine` interface; `GemmaSession` impl using ORT
