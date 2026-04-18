@@ -149,6 +149,20 @@ private fun AsrDebugScreen() {
                         onClick = { launchJob("dec_test") { runDecoderTextTest(context, it) } },
                     ) { Text("Test decoder (text-only)") }
                 }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(
+                        enabled = !running,
+                        onClick = { launchJob("breeze_tok") { runBreezeTokenizerTest(context, it) } },
+                    ) { Text("Test Breeze tok") }
+                    OutlinedButton(
+                        enabled = !running,
+                        onClick = { launchJob("breeze_enc") { runInspectBreezeEncoder(context, it) } },
+                    ) { Text("Inspect Breeze enc") }
+                    OutlinedButton(
+                        enabled = !running,
+                        onClick = { launchJob("breeze_dec") { runInspectBreezeDecoder(context, it) } },
+                    ) { Text("Inspect Breeze dec") }
+                }
             }
 
             Surface(
@@ -621,6 +635,120 @@ private fun topK(logits: FloatArray, k: Int): List<Pair<Int, Float>> {
         }
     }
     return best
+}
+
+private suspend fun runBreezeTokenizerTest(context: Context, log: (String) -> Unit) {
+    val manifest = ModelManifest.load(context, ModelBundle.Breeze)
+    val storage = ModelStorage(context, ModelBundle.Breeze)
+    if (!storage.isInstalled(manifest)) {
+        log("Breeze model not installed. Download it from the settings screen first.")
+        return
+    }
+    val tokensFile = storage.fileFor(
+        manifest.files.first { it.path == "breeze-asr-25-half-tokens.txt" }
+    )
+
+    log("1. Loading tokens.txt …")
+    val (tok, t) = timed {
+        withContext(Dispatchers.IO) { WhisperTokenizer.load(tokensFile) }
+    }
+    log("   vocab size ${tok.vocabSize} in $t ms")
+
+    log("")
+    log("2. Special token IDs …")
+    runCatching {
+        val s = tok.specialIds()
+        log("   <|startoftranscript|> = ${s.startOfTranscript}")
+        log("   <|transcribe|>        = ${s.transcribe}")
+        log("   <|notimestamps|>      = ${s.notimestamps}")
+        log("   <|endoftext|>         = ${s.endOfText}")
+        for ((lang, id) in s.languageIds) log("   <|$lang|>               = $id")
+    }.onFailure { log("   lookup failed: ${it.message}") }
+
+    log("")
+    log("3. Sample pieces (ids 50256, 50257, 50258, 220, 262, 11, 257)…")
+    for (id in listOf(50256, 50257, 50258, 220, 262, 11, 257)) {
+        val p = tok.pieceOf(id) ?: "(none)"
+        val quoted = p.take(30).replace("\n", "\\n").replace("\t", "\\t")
+        log("   $id -> '$quoted'")
+    }
+
+    log("")
+    log("4. decodePlain vs decodeByteLevel on a known English fragment…")
+    val hello = tok.idOf("hello") ?: tok.idOf(" hello") ?: tok.idOf("Hello") ?: -1
+    val world = tok.idOf("world") ?: tok.idOf(" world") ?: tok.idOf("World") ?: -1
+    if (hello > 0 && world > 0) {
+        val ids = intArrayOf(hello, world)
+        log("   ids = ${ids.toList()}")
+        log("   plain     = '${tok.decodePlain(ids)}'")
+        log("   bytelevel = '${tok.decodeByteLevel(ids)}'")
+    } else {
+        log("   couldn't find hello/world in vocab — pick canonical IDs after inspecting output")
+    }
+}
+
+private suspend fun runInspectBreezeEncoder(context: Context, log: (String) -> Unit) {
+    val manifest = ModelManifest.load(context, ModelBundle.Breeze)
+    val storage = ModelStorage(context, ModelBundle.Breeze)
+    if (!storage.isInstalled(manifest)) {
+        log("Breeze model not installed.")
+        return
+    }
+    val modelFile = storage.fileFor(
+        manifest.files.first { it.path == "breeze-asr-25-half-encoder.int8.onnx" }
+    )
+    log("1. Loading encoder (${"%.1f".format(modelFile.length() / 1_048_576.0)} MiB)…")
+    val (session, t) = timed {
+        withContext(Dispatchers.IO) { WhisperEncoder(modelFile) }
+    }
+    log("   EP: ${session.executionProvider}")
+    log("   loaded in $t ms")
+    try {
+        log("")
+        log("2. Inputs (${session.inputSummary.size}):")
+        for ((name, info) in session.inputSummary.entries.sortedBy { tensorSortKey(it.key) }) {
+            log("   ${compactTensorLine(name, info)}")
+        }
+        log("")
+        log("3. Outputs (${session.outputSummary.size}):")
+        for ((name, info) in session.outputSummary.entries.sortedBy { tensorSortKey(it.key) }) {
+            log("   ${compactTensorLine(name, info)}")
+        }
+    } finally {
+        session.close()
+    }
+}
+
+private suspend fun runInspectBreezeDecoder(context: Context, log: (String) -> Unit) {
+    val manifest = ModelManifest.load(context, ModelBundle.Breeze)
+    val storage = ModelStorage(context, ModelBundle.Breeze)
+    if (!storage.isInstalled(manifest)) {
+        log("Breeze model not installed.")
+        return
+    }
+    val modelFile = storage.fileFor(
+        manifest.files.first { it.path == "breeze-asr-25-half-decoder.int8.onnx" }
+    )
+    log("1. Loading decoder (${"%.1f".format(modelFile.length() / 1_048_576.0)} MiB)…")
+    val (session, t) = timed {
+        withContext(Dispatchers.IO) { WhisperDecoder(modelFile) }
+    }
+    log("   EP: ${session.executionProvider}")
+    log("   loaded in $t ms")
+    try {
+        log("")
+        log("2. Inputs (${session.inputSummary.size}):")
+        for ((name, info) in session.inputSummary.entries.sortedBy { tensorSortKey(it.key) }) {
+            log("   ${compactTensorLine(name, info)}")
+        }
+        log("")
+        log("3. Outputs (${session.outputSummary.size}):")
+        for ((name, info) in session.outputSummary.entries.sortedBy { tensorSortKey(it.key) }) {
+            log("   ${compactTensorLine(name, info)}")
+        }
+    } finally {
+        session.close()
+    }
 }
 
 private suspend fun recordPcm(durationSec: Int): ShortArray {
