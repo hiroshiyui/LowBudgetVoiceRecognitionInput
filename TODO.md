@@ -1,8 +1,10 @@
 # TODO
 
-**Scope change 2026-04-18:** dropped Japanese and Korean; IME now targets 4 languages (zh-Hant-TW, zh-Hans-CN, en-US, en-GB). Pivoting the ASR engine from Gemma 4 E2B (raw onnxruntime-android) to **MediaTek-Research/Breeze-ASR-25** via **sherpa-onnx** for native Traditional Chinese output + near-realtime latency. Gemma code stays working until Breeze is validated end-to-end.
+**Status 2026-04-18 (paused):** the project reached the end of its current iteration loop. Both ASR stacks (Gemma 4 E2B, Breeze-ASR-25) are wired end-to-end in code; neither ships because the test device (5.3 GB RAM) is too small for Breeze (LMKD-killed on first decode step) and Gemma is 9.4× realtime (47 s for 5 s audio). Realistic paths forward are listed in `README.md`. The IME service, audio capture, download infrastructure, and debug tooling are all functional — the only unsolved piece is "an ASR engine that fits this device **and** outputs Traditional Chinese natively". Leaving it here until the user has time and/or a beefier device.
 
-Tracks milestones from PLAN.md. M1–M4 complete end-to-end on Gemma; M4-bridge (Breeze pivot) is next before M5.
+**Scope change 2026-04-18:** dropped Japanese and Korean; IME targets 4 languages (zh-Hant-TW, zh-Hans-CN, en-US, en-GB).
+
+Tracks milestones from PLAN.md.
 
 ## M1 — Project plumbing  ✅ done
 - [x] Add `RECORD_AUDIO` + `INTERNET` permissions in AndroidManifest
@@ -81,27 +83,48 @@ Tracks milestones from PLAN.md. M1–M4 complete end-to-end on Gemma; M4-bridge 
       sherpa-onnx does Whisper mel internally
 - [ ] ~~Test transcription quality on ja/ko~~ — dropped from scope 2026-04-18
 
-## M4-bridge — Pivot to Breeze-ASR-25 via sherpa-onnx  🚧 next
-- [ ] Download `sherpa-onnx-<latest>.aar` from GitHub Releases, place in
-      `app/libs/`, wire via `implementation(files("libs/..."))`
-- [ ] Add `abiFilters = listOf("arm64-v8a")` to trim the 54 MB AAR
-- [ ] Drop `onnxruntime-android` dep from build.gradle.kts (sherpa-onnx
-      bundles its own ORT) — or keep until Gemma code is gone
-- [ ] Update `assets/model_manifest.json` to point to
-      `MediaTek-Research/Breeze-ASR-25-onnx-250806` int8 variant:
-      encoder (766 MB) + decoder (1.01 GB) + tokens.txt (~817 kB) ≈ 1.78 GB
-- [ ] Compute SHA-256 of each file at build time (HF LFS pointers expose
-      `oid sha256:...` via the `raw/main/` URL) and bake into the manifest
-- [ ] Write a `BreezeAsrSession` Kotlin wrapper that uses `OfflineRecognizer`
-      + `OfflineStream` API: accepts ShortArray PCM, returns transcript
-- [ ] Wire per-IME-subtype `language` code: "zh" for both zh subtypes,
-      "en" for both en subtypes (OfflineWhisperModelConfig.language)
-- [ ] Add a "Test Breeze" button to AsrDebugActivity for on-device validation
-- [ ] Measure latency — expected near-realtime on a 5.3 GB device given
-      int8 quantization and sherpa-onnx's optimized Whisper path
-- [ ] Once validated end-to-end, delete `asr/` Gemma files: AudioPreprocessor,
-      AudioEncoderSession, EmbedTokensSession, DecoderSession, AudioScatter,
-      Fp16, GemmaTokenizer, AsrPrompt, AsrSessionOptions (keep AudioCapture)
+## M4-bridge — Breeze-ASR-25 pivot  ⏸ blocked on device RAM
+- [x] Sherpa-onnx evaluated and skipped — the Breeze ONNX loads fine on the
+      `onnxruntime-android` we already ship; sherpa-onnx adds a 54 MB AAR
+      (not on Maven Central) + a second ORT copy for no extra capability.
+- [x] `assets/breeze_model_manifest.json` — int8 subset: encoder 766 MB,
+      decoder 1.01 GB, tokens.txt 798 KB; SHA-256s from HF LFS `oid`.
+- [x] `ModelBundle` enum plumbs Gemma + Breeze side by side (manifest asset,
+      storage subdir, WorkManager work name, human label).
+- [x] `WhisperPreprocessor` — 80-bin Slaney log-mel; 512-point FFT approx
+      of Whisper's 400 (zero-pad + 257-bin filterbank). Mel-frame count is
+      configurable — `BreezeAsrRunner` uses 1000 frames (10 s window) to
+      shrink cross K/V from 490 MB → 160 MB.
+- [x] `WhisperTokenizer` — sherpa-onnx tokens.txt (space-separated,
+      base64-encoded pieces). `decodeBase64` verified on-device. Whisper
+      specials aren't in the file; IDs hardcoded from openai/whisper
+      canonical order.
+- [x] `WhisperEncoder` — ORT wrapper. Input `mel` f32 [1,80,N]; outputs
+      `n_layer_cross_k` / `n_layer_cross_v` f32 [32,1,N/2,1280].
+- [x] `WhisperDecoder` — ORT wrapper with fixed 448-slot self-KV cache and
+      `offset` scalar. Step wraps the session Result so self-KV tensors
+      survive across calls without a clone.
+- [x] `BreezeAsrRunner` — preprocess → encode → close encoder → prefill
+      `<|sot|><|lang|><|transcribe|><|notimestamps|>` → greedy decode until
+      `<|endoftext|>` or offset 448 → base64 detokenise.
+- [x] `AsrDebugActivity` Breeze buttons (Test tok, Inspect enc, Inspect dec,
+      Run pipeline); per-phase `Log.d(TAG="BreezeAsr", …)` breadcrumbs for
+      silent LMKD kills.
+- [ ] ~~End-to-end transcript on the test device~~ — BLOCKED. Pipeline
+      reaches `prefill firstPredicted=15947` then the process is
+      LMKD-killed during the first decoder.forward step. Peak memory
+      (decoder 961 MB + cross K/V 160 MB + 2× self-KV 290 MB + ORT
+      workspace + Java heap 300 MB + OS) exceeds what the 5.3 GB device
+      has free. No further code-level mitigation will fix this; the model
+      simply needs more RAM.
+
+## What's left to unblock the IME
+1. **Validate on an 8+ GB device** — codebase is ready; nothing new to write
+   if Breeze works on bigger hardware.
+2. **Swap in Whisper-small + OpenCC** if Breeze can't be carried forward.
+   The `ModelBundle` plumbing already supports multiple bundles side-by-side.
+3. **Hybrid: Whisper-small baseline + Breeze premium** — runtime picks
+   based on `Preflight.totalRamBytes`; same download flow, two manifests.
 
 ## M5 — Wire AsrEngine into IME (en-US only)  ⏸ pending
 - [ ] `AsrEngine` interface; `GemmaSession` impl using ORT
