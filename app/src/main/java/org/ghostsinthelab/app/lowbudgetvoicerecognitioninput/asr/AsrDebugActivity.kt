@@ -113,6 +113,22 @@ private fun AsrDebugScreen() {
                 }
                 OutlinedButton(
                     enabled = !running,
+                    onClick = {
+                        scope.launch {
+                            running = true
+                            log.clear()
+                            try {
+                                runTokenizerTest(context) { log.add(it) }
+                            } catch (t: Throwable) {
+                                log.add("ERROR: ${t.javaClass.simpleName}: ${t.message}")
+                            } finally {
+                                running = false
+                            }
+                        }
+                    },
+                ) { Text("Test tokenizer") }
+                OutlinedButton(
+                    enabled = !running,
                     onClick = { log.clear() },
                 ) { Text("Clear") }
             }
@@ -185,6 +201,55 @@ private suspend fun runPipeline(context: Context, log: (String) -> Unit) {
     } finally {
         session.close()
     }
+}
+
+private suspend fun runTokenizerTest(context: Context, log: (String) -> Unit) {
+    log("1. Checking model…")
+    val manifest = ModelManifest.load(context)
+    val storage = ModelStorage(context)
+    if (!storage.isInstalled(manifest)) {
+        log("   Model not installed.")
+        return
+    }
+    val tokenizerFile = storage.fileFor(manifest.files.first { it.path == "tokenizer.json" })
+    log("   ok: ${tokenizerFile.absolutePath} (${tokenizerFile.length()} bytes)")
+
+    log("")
+    log("2. Loading tokenizer…")
+    val (tok, tLoad) = timed {
+        withContext(Dispatchers.IO) { GemmaTokenizer.load(tokenizerFile) }
+    }
+    log("   loaded in $tLoad ms, vocab size ${tok.vocabSize()}")
+    log("   audio_token_id lookup: ${tok.idOf("<|audio|>")}")
+    log("   bos lookup: ${tok.idOf("<bos>")}, eos lookup: ${tok.idOf("<eos>")}")
+
+    log("")
+    log("3. Encoding 'Hello world' (no specials)…")
+    val helloIds = tok.encode("Hello world")
+    log("   ids = ${helloIds.toList()}")
+    val helloBack = tok.decode(helloIds)
+    log("   roundtrip: '$helloBack'")
+
+    log("")
+    log("4. Encoding a chunk with specials (<|audio|> placeholder)…")
+    val withSpec = tok.encodeWithSpecials(
+        "<bos>Transcribe the following speech in English: <|audio|> End."
+    )
+    log("   length = ${withSpec.size}")
+    log("   first 20 = ${withSpec.take(20)}")
+    log("   contains <|audio|> id? ${tok.idOf("<|audio|>") in withSpec.toList()}")
+
+    log("")
+    log("5. Decoding specials-stripped…")
+    val back = tok.decode(withSpec, skipSpecialTokens = true)
+    log("   '$back'")
+
+    log("")
+    log("6. Byte-fallback sanity (non-ASCII)…")
+    val unicodeIds = tok.encode("こんにちは")
+    log("   ids len=${unicodeIds.size}")
+    val unicodeBack = tok.decode(unicodeIds)
+    log("   roundtrip: '$unicodeBack'")
 }
 
 private suspend fun recordPcm(durationSec: Int): ShortArray {
