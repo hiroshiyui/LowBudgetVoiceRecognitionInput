@@ -91,10 +91,12 @@ class WhisperTokenizer private constructor(
             tokensFile.useLines { lines ->
                 for (line in lines) {
                     if (line.isEmpty()) continue
-                    val tab = line.lastIndexOf('\t')
-                    if (tab < 0) continue
-                    val piece = line.substring(0, tab)
-                    val id = line.substring(tab + 1).toIntOrNull() ?: continue
+                    // Sherpa-onnx Whisper tokens.txt uses space (not tab) as the piece/id
+                    // separator; the id is always the last whitespace-separated field.
+                    val sep = line.indexOfLast { it == ' ' || it == '\t' }
+                    if (sep < 0) continue
+                    val piece = line.substring(0, sep)
+                    val id = line.substring(sep + 1).toIntOrNull() ?: continue
                     pieceToId[piece] = id
                     if (id > maxId) maxId = id
                 }

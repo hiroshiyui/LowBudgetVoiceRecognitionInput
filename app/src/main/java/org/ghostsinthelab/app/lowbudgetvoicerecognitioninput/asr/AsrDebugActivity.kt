@@ -163,6 +163,18 @@ private fun AsrDebugScreen() {
                         onClick = { launchJob("breeze_dec") { runInspectBreezeDecoder(context, it) } },
                     ) { Text("Inspect Breeze dec") }
                 }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilledTonalButton(
+                        enabled = !running,
+                        onClick = {
+                            if (!hasMic) {
+                                micLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                                return@FilledTonalButton
+                            }
+                            launchJob("breeze_pipe") { runBreezePipeline(context, it) }
+                        },
+                    ) { Text(if (!hasMic) "Grant mic" else "Run Breeze pipeline") }
+                }
             }
 
             Surface(
@@ -635,6 +647,59 @@ private fun topK(logits: FloatArray, k: Int): List<Pair<Int, Float>> {
         }
     }
     return best
+}
+
+private suspend fun runBreezePipeline(context: Context, log: (String) -> Unit) {
+    val manifest = ModelManifest.load(context, ModelBundle.Breeze)
+    val storage = ModelStorage(context, ModelBundle.Breeze)
+    if (!storage.isInstalled(manifest)) {
+        log("Breeze model not installed.")
+        return
+    }
+    val encoderFile = storage.fileFor(
+        manifest.files.first { it.path == "breeze-asr-25-half-encoder.int8.onnx" }
+    )
+    val decoderFile = storage.fileFor(
+        manifest.files.first { it.path == "breeze-asr-25-half-decoder.int8.onnx" }
+    )
+    val tokensFile = storage.fileFor(
+        manifest.files.first { it.path == "breeze-asr-25-half-tokens.txt" }
+    )
+
+    val totalT0 = SystemClock.elapsedRealtime()
+
+    log("1. Recording 5 s…")
+    val pcm = recordPcm(durationSec = 5)
+    log("   ${pcm.size} samples")
+
+    log("")
+    log("2. Running BreezeAsrRunner (en)…")
+    val runner = BreezeAsrRunner(encoderFile, decoderFile, tokensFile)
+    val tokens = ArrayList<Int>()
+    val result = withContext(Dispatchers.IO) {
+        runner.transcribe(
+            pcm = pcm,
+            language = "en",
+            maxNewTokens = 80,
+            onProgress = { step, id -> tokens.add(id) },
+        )
+    }
+
+    log("   per-phase:")
+    for (phase in result.phases) {
+        log("     ${phase.name.padEnd(10)} ${phase.ms} ms")
+    }
+    log("")
+    log("3. Generated ${result.generatedIds.size} tokens")
+    log("   first predicted id = ${result.firstPredictedId}")
+    log("   ids = ${result.generatedIds.toList().take(30)}${if (result.generatedIds.size > 30) "…" else ""}")
+
+    val total = SystemClock.elapsedRealtime() - totalT0
+    log("")
+    log("=== TRANSCRIPT ===")
+    log(result.transcript.ifBlank { "(empty)" })
+    log("")
+    log("Total wall time: ${total / 1000.0} s")
 }
 
 private suspend fun runBreezeTokenizerTest(context: Context, log: (String) -> Unit) {
